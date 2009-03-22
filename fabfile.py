@@ -1,5 +1,6 @@
 import os
 import sys
+from types import ListType
         
 class VersionControl(object):
     """Generates command strings for VCS tasks"""
@@ -42,7 +43,7 @@ def install_module(src_dir, module_name='', dist_utils=False):
     distutils or by symlinking the package to site-packages
 
     """
-
+    
     #setup using distutils
     if dist_utils:
         cmd = '(cd src/%s;\\\n../../ve/bin/python setup.py install)' % src_dir
@@ -51,7 +52,21 @@ def install_module(src_dir, module_name='', dist_utils=False):
         src_path = os.path.join(src_dir,module_name).rstrip('/')
         cmd = '(cd ve/lib/python2.5/site-packages;\\\nln -s ../../../../src/%s .)' % (src_path)
     return cmd
-        
+    
+def pkg_install(pkg):
+    """
+    Installs packages based on package arguments.  If a package name isn't
+    specified, assume dist_utils.
+    """        
+    if pkg.has_key('package'):
+        if isinstance(pkg['package'], ListType):
+            for package in pkg['package']:
+                local(install_module(pkg['name'], package))
+        else:
+            local(install_module(pkg['name'], pkg['package']))
+    else:
+        local(install_module(pkg['name'], dist_utils=True))
+
 
 def bootstrap():
     """
@@ -63,12 +78,13 @@ def bootstrap():
     #put the cwd on the python path so we can use fabreqs.py
     sys.path.append('.') 
     from fabreqs import requirements
+    local('rm -rf ve src')
     local('virtualenv ve')
     #hack activate so it uses project directory instead of ve in prompt
     local('sed \'s/(`basename \\\\"\\$VIRTUAL_ENV\\\\\"`)/(`basename \\\\`dirname \\\\"$VIRTUAL_ENV\\\\"\\\\``)/g\' ve/bin/activate > ve/bin/activate.tmp')
     #sed 's/(`basename \\"\$VIRTUAL_ENV\\\"`)/(`basename \\`dirname \\"$VIRTUAL_ENV\\"\\``)/g'
     local('mv ve/bin/activate.tmp ve/bin/activate')
-    local('mkdir src')
+    local('mkdir src', fail='warn')
     for pkg in requirements:
         #easy_install package from PyPi
         if pkg['dist'] == 'pypi':
@@ -81,6 +97,11 @@ def bootstrap():
         elif pkg['dist'] == 'wget':
             local('cd src && wget %s' % pkg['url'])
             local(install_module(pkg['name']))
+
+        elif pkg['dist'] == 'zipfile':
+            filename = pkg['url'].split('/')[-1]
+            local('cd src && wget %s && unzip %s' % (pkg['url'], filename))
+            pkg_install(pkg)
         
         else: #it's a vcs
             if pkg['dist'] == 'svn':
@@ -93,13 +114,4 @@ def bootstrap():
                 local(Bazaar(**pkg).branch())
             else:
                 raise Exception, '%s is not a recognized distribution method' % pkg['dist']
-            #if a package name isn't specified, assume dist_utils
-            if pkg.has_key('package'):
-                if isinstance(pkg['package'], list):
-                    for package in pkg['package']:
-                        local(install_module(pkg['name'], package))
-                else:
-                    local(install_module(pkg['name'], pkg['package']))
-            else:
-                local(install_module(pkg['name'], dist_utils=True))
-                
+            pkg_install(pkg)
