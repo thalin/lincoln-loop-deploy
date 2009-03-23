@@ -37,7 +37,7 @@ class Bazaar(VersionControl):
         return cmd
 
 
-def install_module(src_dir, module_name='', dist_utils=False):
+def install_module(src_dir, module_name='', dist_utils=False, media_type=None):
     """
     Installs a Python module from the ./src directory either using
     distutils or by symlinking the package to site-packages
@@ -49,24 +49,34 @@ def install_module(src_dir, module_name='', dist_utils=False):
         cmd = '(cd src/%s;\\\n../../ve/bin/python setup.py install)' % src_dir
     #symlink to site-packages
     else:
-        src_path = os.path.join(src_dir,module_name).rstrip('/')
-        cmd = '(cd ve/lib/python2.5/site-packages;\\\nln -s ../../../../src/%s .)' % (src_path)
+        src = os.path.join(src_dir,module_name).rstrip('/')
+        if media_type:
+            dest_path = 'media/%s/' % media_type
+            src_path = '../../src/%s' % src
+        else:
+            dest_path = 've/lib/python2.5/site-packages'
+            src_path = '../../../../src/%s' % src
+        cmd = 'ln -sf %s %s' % (src_path, dest_path)
     return cmd
     
 def pkg_install(pkg):
     """
     Installs packages based on package arguments.  If a package name isn't
     specified, assume dist_utils.
-    """        
+    """
+    if pkg.has_key('media'):
+        media = pkg['media']
+        local('mkdir media/%s' % media, fail='warn')
+    else:
+        media = None
     if pkg.has_key('package'):
         if isinstance(pkg['package'], ListType):
             for package in pkg['package']:
-                local(install_module(pkg['name'], package))
+                local(install_module(pkg['name'], package, media_type=media))
         else:
-            local(install_module(pkg['name'], pkg['package']))
+            local(install_module(pkg['name'], pkg['package'], media_type=media))
     else:
-        local(install_module(pkg['name'], dist_utils=True))
-
+        local(install_module(pkg['name'], dist_utils=True, media_type=media))
 
 def bootstrap():
     """
@@ -85,6 +95,7 @@ def bootstrap():
     #sed 's/(`basename \\"\$VIRTUAL_ENV\\\"`)/(`basename \\`dirname \\"$VIRTUAL_ENV\\"\\``)/g'
     local('mv ve/bin/activate.tmp ve/bin/activate')
     local('mkdir src', fail='warn')
+    local('mkdir media', fail='warn')
     for pkg in requirements:
         #easy_install package from PyPi
         if pkg['dist'] == 'pypi':
