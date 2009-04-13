@@ -41,9 +41,7 @@ def install_module(src_dir, module_name='', dist_utils=False, media_type=None):
     """
     Installs a Python module from the ./src directory either using
     distutils or by symlinking the package to site-packages
-
     """
-    
     #setup using distutils
     if dist_utils:
         cmd = '(cd src/%s;\\\n../../ve/bin/python setup.py install)' % src_dir
